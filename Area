@@ -1,0 +1,116 @@
+# =========================
+# RESET
+# =========================
+rm(list = ls())
+
+# =========================
+# LOAD LIBRARY
+# =========================
+library(terra)
+library(dplyr)
+library(tidyr)
+
+# =========================
+# SET FOLDER
+# =========================
+setwd("C:/Users/hassidiq/Documents/ICRAF/SOLUSI/Jawa Tengah/LULC_Jateng/Hasil BAU V1")
+
+# =========================
+# CEK FILE (WAJIB)
+# =========================
+print(list.files())
+
+# =========================
+# LOAD RASTER
+# =========================
+lc_2030 <- rast("landscape2030.tif")
+lc_2035 <- rast("landscape2035.tif")
+lc_2040 <- rast("landscape2040.tif")
+lc_2045 <- rast("landscape2045.tif")
+lc_2050 <- rast("landscape2050.tif")
+
+# =========================
+# LEGEND
+# =========================
+kelas <- data.frame(
+  value = as.integer(1:30),
+  class_name = c(
+    "Hutan lahan kering primer","Hutan lahan kering sekunder","Hutan pantai",
+    "Hutan mangrove primer","Hutan mangrove sekunder","Hutan tanaman Jati",
+    "Hutan tanaman Pinus","Hutan tanaman Agathis","Karet monokultur",
+    "Kelapa monokultur","Kebun campuran","Cengkeh agroforestri",
+    "Durian agroforestri","Kakao agroforestri","Kopi agroforestri",
+    "Sengon agroforestri","Teh","Sawah padi",
+    "Pertanian lahan kering lainnya","Padang rumput","Permukiman",
+    "Lahan terbuka","Tambak","Sungai/badan air/irigasi",
+    "Danau/waduk","Lamun","Terumbu karang/alga",
+    "Makroalga/Rumput laut","Laut Dalam","Awan/bayangan"
+  )
+)
+
+# =========================
+# FUNCTION HITUNG LUASAN
+# =========================
+calc_area <- function(r, year){
+  f <- as.data.frame(freq(r))
+  f$value <- as.integer(f$value)
+  
+  pixel_size <- prod(res(r)) / 10000
+  f$area_ha <- f$count * pixel_size
+  f$year <- year
+  
+  return(f)
+}
+
+# =========================
+# HITUNG SEMUA
+# =========================
+df_all <- bind_rows(
+  calc_area(lc_2030, 2030),
+  calc_area(lc_2035, 2035),
+  calc_area(lc_2040, 2040),
+  calc_area(lc_2045, 2045),
+  calc_area(lc_2050, 2050)
+)
+
+# =========================
+# DEBUG CEK
+# =========================
+print("STEP 1 OK")
+print(head(df_all))
+
+# =========================
+# TAMBAH SEMUA KELAS
+# =========================
+df_all <- df_all %>%
+  mutate(value = as.integer(value)) %>%
+  complete(value = 1:30, year,
+           fill = list(count = 0, area_ha = 0))
+
+# =========================
+# JOIN LEGEND
+# =========================
+df_all <- left_join(df_all, kelas, by = "value")
+
+# =========================
+# DEBUG CEK LAGI
+# =========================
+print("STEP 2 OK")
+print(names(df_all))
+
+# =========================
+# BUAT OUTPUT
+# =========================
+df_long <- df_all[, c("value","class_name","year","count","area_ha")]
+
+df_wide <- pivot_wider(df_long,
+                       names_from = year,
+                       values_from = area_ha)
+
+# =========================
+# EXPORT
+# =========================
+write.csv(df_long, "LULC_area_long.csv", row.names = FALSE)
+write.csv(df_wide, "LULC_area_wide.csv", row.names = FALSE)
+
+print("SELESAI 🚀")
